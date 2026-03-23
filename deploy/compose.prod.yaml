@@ -1,0 +1,22 @@
+services:
+  youtube-parser:
+    image: ${YOUTUBE_PARSER_IMAGE:-ballbase/youtube-parser}:${YOUTUBE_PARSER_VERSION:-dev}
+    pull_policy: never
+    container_name: youtube-parser
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${YOUTUBE_PARSER_HOST_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - content-shared
+
+networks:
+  content-shared:
+    external: true
