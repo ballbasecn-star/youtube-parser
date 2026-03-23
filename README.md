@@ -73,3 +73,15 @@ npm run dev
 2. 把当前占位 `title/summary` 替换成真实内容
 3. 补作者、媒体、字幕和指标抓取
 4. 与 `linker-content` 的 `ParserPort` 做真实联调
+
+## 发布入口
+
+如果需要手动发布，请直接看：
+
+- `deploy/README.md`
+
+当前仓库默认采用：
+
+1. 本地构建镜像
+2. 本地导出 bundle
+3. 上传服务器并执行 `docker load + docker compose up -d`
