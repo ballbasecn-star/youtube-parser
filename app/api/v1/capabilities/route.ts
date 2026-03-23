@@ -1,16 +1,19 @@
-import { NextResponse } from "next/server";
+import { createRequestId, successResponse } from "@/lib/parser-contract";
 
 export function GET() {
-  return NextResponse.json({
-    service: "youtube-parser",
-    parserType: "YOUTUBE",
-    version: "0.1.0",
-    capabilities: {
-      parseUrl: false,
-      parseShareText: false,
+  const requestId = createRequestId();
+
+  return successResponse(requestId, {
+    platform: "youtube",
+    supportedSourceTypes: ["video", "share_text"],
+    features: {
       transcript: false,
-      metadata: true,
-      health: true
+      images: false,
+      metrics: false,
+      authorProfile: false,
+      deepAnalysis: false,
+      batchParse: false,
+      asyncParse: false
     }
   });
 }

@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
+import { successResponse, createRequestId } from "@/lib/parser-contract";
 
 export function GET() {
-  return NextResponse.json({
-    service: "youtube-parser",
-    status: "UP",
-    checkedAt: new Date().toISOString()
+  const requestId = createRequestId();
+  return successResponse(requestId, {
+    status: "UP"
   });
 }
