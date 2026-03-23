@@ -1,0 +1,15 @@
+services:
+  youtube-parser:
+    container_name: youtube-parser
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    networks:
+      - content-shared
+    restart: unless-stopped
+
+networks:
+  content-shared:
+    external: true
