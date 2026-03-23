@@ -24,3 +24,5 @@ pnpm-debug.log*
 
 # Release bundle
 .tmp/
+
+deploy/.release.local.env
