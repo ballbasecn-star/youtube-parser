@@ -67,6 +67,12 @@ npm run dev
 - `linker-content/docs/architecture/parser-contract.md`
 - `linker-content/docs/architecture/parser-openapi.md`
 
+当前仓库内的契约与重设计文档入口：
+
+- `docs/README.md`
+- `docs/parser-contract.md`
+- `docs/redesign.md`
+
 ## 下一步建议
 
 1. 补真实 YouTube 页面或 API 解析链路
