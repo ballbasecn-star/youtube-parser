@@ -31,10 +31,10 @@ async def get_capabilities() -> CapabilitiesResponse:
         platform="youtube",
         supported_source_types=["video", "share_text"],
         features={
-            "transcript": False,  # Will be enabled when transcript provider is ready
+            "transcript": True,  # Available via yt-dlp
             "images": True,  # Thumbnail images are available
-            "metrics": False,  # Will be enabled when metrics provider is ready
-            "authorProfile": False,  # Will be enabled when author provider is ready
+            "metrics": True,  # Available via yt-dlp (views, likes, comments)
+            "authorProfile": True,  # Channel info available
             "deepAnalysis": False,  # Not in current scope
             "batchParse": False,  # Not in current scope
             "asyncParse": False,  # Not in current scope

@@ -81,13 +81,16 @@ class TestCapabilitiesEndpoint:
 class TestParseEndpoint:
     """Tests for POST /api/v1/parse."""
 
+    # Real YouTube video IDs for testing
+    RICKROLL_ID = "dQw4w9WgXcQ"
+
     def test_parse_watch_url(self, client: TestClient) -> None:
         """Test parsing a watch URL."""
         response = client.post(
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
                 },
             },
         )
@@ -96,8 +99,10 @@ class TestParseEndpoint:
         data = response.json()
         assert data["success"] is True
         assert data["data"]["platform"] == "youtube"
-        assert data["data"]["externalId"] == "dQw4w9WgXcQ"
-        assert data["data"]["canonicalUrl"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        assert data["data"]["externalId"] == self.RICKROLL_ID
+        assert data["data"]["canonicalUrl"] == f"https://www.youtube.com/watch?v={self.RICKROLL_ID}"
+        # Should have real title now
+        assert data["data"]["title"] is not None
 
     def test_parse_short_url(self, client: TestClient) -> None:
         """Test parsing a youtu.be short URL."""
@@ -105,7 +110,7 @@ class TestParseEndpoint:
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://youtu.be/dQw4w9WgXcQ",
+                    "sourceUrl": f"https://youtu.be/{self.RICKROLL_ID}",
                 },
             },
         )
@@ -113,16 +118,17 @@ class TestParseEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["data"]["externalId"] == "dQw4w9WgXcQ"
-        assert data["data"]["canonicalUrl"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        assert data["data"]["externalId"] == self.RICKROLL_ID
+        assert data["data"]["canonicalUrl"] == f"https://www.youtube.com/watch?v={self.RICKROLL_ID}"
 
     def test_parse_shorts_url(self, client: TestClient) -> None:
         """Test parsing a shorts URL."""
+        # Using a real shorts video ID
         response = client.post(
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/shorts/abc123xyz",
+                    "sourceUrl": f"https://www.youtube.com/shorts/{self.RICKROLL_ID}",
                 },
             },
         )
@@ -130,16 +136,17 @@ class TestParseEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["data"]["externalId"] == "abc123xyz"
-        assert data["data"]["canonicalUrl"] == "https://www.youtube.com/watch?v=abc123xyz"
+        assert data["data"]["externalId"] == self.RICKROLL_ID
+        assert data["data"]["canonicalUrl"] == f"https://www.youtube.com/watch?v={self.RICKROLL_ID}"
 
     def test_parse_live_url(self, client: TestClient) -> None:
         """Test parsing a live URL."""
+        # Using the same video ID for live URL format test
         response = client.post(
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/live/testVideo123",
+                    "sourceUrl": f"https://www.youtube.com/live/{self.RICKROLL_ID}",
                 },
             },
         )
@@ -147,7 +154,7 @@ class TestParseEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["data"]["externalId"] == "testVideo123"
+        assert data["data"]["externalId"] == self.RICKROLL_ID
 
     def test_parse_share_text(self, client: TestClient) -> None:
         """Test parsing share text containing a URL."""
@@ -155,7 +162,7 @@ class TestParseEndpoint:
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceText": "看看这个视频 https://youtu.be/dQw4w9WgXcQ 很有意思",
+                    "sourceText": f"看看这个视频 https://youtu.be/{self.RICKROLL_ID} 很有意思",
                 },
             },
         )
@@ -163,7 +170,7 @@ class TestParseEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["data"]["externalId"] == "dQw4w9WgXcQ"
+        assert data["data"]["externalId"] == self.RICKROLL_ID
 
     def test_parse_returns_request_id(self, client: TestClient) -> None:
         """Test that response includes request ID."""
@@ -172,7 +179,7 @@ class TestParseEndpoint:
             json={
                 "requestId": "test-request-123",
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/watch?v=test123",
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
                 },
             },
         )
@@ -187,7 +194,7 @@ class TestParseEndpoint:
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/watch?v=test123",
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
                 },
             },
         )
@@ -202,7 +209,7 @@ class TestParseEndpoint:
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/watch?v=test123",
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
                 },
             },
         )
@@ -210,6 +217,28 @@ class TestParseEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "parserVersion" in data["meta"]
+
+    def test_parse_returns_real_metadata(self, client: TestClient) -> None:
+        """Test that real metadata is returned."""
+        response = client.post(
+            "/api/v1/parse",
+            json={
+                "input": {
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+
+        # Check real metadata is present
+        payload = data["data"]
+        assert payload["title"] is not None
+        assert "Never Gonna Give You Up" in payload["title"] or "Rick Astley" in payload["title"]
+        assert payload["author"] is not None
+        assert payload["author"]["name"] is not None
 
 
 class TestParseErrors:
@@ -264,13 +293,15 @@ class TestParseErrors:
 class TestEnvelope:
     """Tests for the API envelope structure."""
 
+    RICKROLL_ID = "dQw4w9WgXcQ"
+
     def test_success_envelope_structure(self, client: TestClient) -> None:
         """Test that success response has correct envelope structure."""
         response = client.post(
             "/api/v1/parse",
             json={
                 "input": {
-                    "sourceUrl": "https://www.youtube.com/watch?v=test123",
+                    "sourceUrl": f"https://www.youtube.com/watch?v={self.RICKROLL_ID}",
                 },
             },
         )
