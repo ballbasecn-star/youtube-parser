@@ -9,16 +9,16 @@
 - ✅ URL 规范化与 videoId 提取
 - ✅ FastAPI 服务骨架
 - ✅ 统一契约 schema
-- ⏳ 真实元数据获取
-- ⏳ 字幕/转录文本获取
-- ⏳ 指标数据获取
+- ✅ 真实元数据获取
+- ✅ 字幕/转录文本获取
+- ✅ 指标数据获取
 
 ### 目标
 
-1. 接入真实 metadata provider
-2. 接入 transcript provider
-3. 接入基础 metrics
-4. 补 fixtures 回归测试
+1. 接入真实 metadata provider ✅
+2. 接入 transcript provider ✅
+3. 接入基础 metrics ✅
+4. 补 fixtures 回归测试 ✅
 
 ---
 
@@ -854,3 +854,4 @@ transcript-backup = [
 | 日期 | 版本 | 说明 |
 |------|------|------|
 | 2025-03-27 | v1.0 | 初版设计 |
+| 2026-03-27 | v2.0 | 实现完成，标记所有目标为 ✅ |
