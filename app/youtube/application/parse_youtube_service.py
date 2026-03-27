@@ -238,21 +238,12 @@ class ParseYoutubeService:
         if language_hint:
             langs = [language_hint, "en"]
 
-        transcript_result: TranscriptResult | None = None
+        # Always fetch transcript separately (downloads actual subtitle file)
+        transcript_result = await self.provider_orchestrator.fetch_transcript(
+            video_id, langs
+        )
 
-        # If metadata came from yt-dlp, try to extract transcript from it
-        if metadata_result.data and metadata_result.source in ("yt_dlp", "merged_oembed_ytdlp"):
-            transcript_result = self.provider_orchestrator.ytdlp_provider.extract_transcript(
-                metadata_result.data, langs
-            )
-
-        # Otherwise, fetch transcript separately
-        if transcript_result is None or not transcript_result.success:
-            transcript_result = await self.provider_orchestrator.fetch_transcript(
-                video_id, langs
-            )
-
-        if transcript_result.success:
+        if transcript_result.success and transcript_result.text:
             logger.info(
                 "transcript_fetch_success",
                 request_id=request_id,
@@ -260,6 +251,7 @@ class ParseYoutubeService:
                 language=transcript_result.language,
                 is_auto=transcript_result.is_auto_generated,
                 segment_count=len(transcript_result.segments),
+                text_length=len(transcript_result.text),
             )
 
             # Normalize and attach

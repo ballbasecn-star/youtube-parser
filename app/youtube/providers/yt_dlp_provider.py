@@ -16,7 +16,11 @@ Cons:
 """
 
 import asyncio
+import os
+import re
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -231,13 +235,16 @@ class YtDlpProvider(BaseProvider):
 
         return f"Video unavailable: {error}"
 
-    def extract_transcript(
-        self, info: dict[str, Any], language_preference: list[str] | None = None
+    async def fetch_transcript(
+        self, video_id: str, language_preference: list[str] | None = None
     ) -> TranscriptResult:
-        """Extract transcript from yt-dlp info.
+        """Fetch transcript by downloading subtitle file.
+
+        This method downloads the actual subtitle file and parses it,
+        rather than just getting metadata.
 
         Args:
-            info: yt-dlp info dict
+            video_id: YouTube video ID
             language_preference: Preferred languages for transcript
 
         Returns:
@@ -245,59 +252,156 @@ class YtDlpProvider(BaseProvider):
         """
         langs = language_preference or self.DEFAULT_SUBTITLE_LANGS
 
-        # Try manual subtitles first, then auto-generated
-        subtitles = info.get("subtitles", {})
-        auto_captions = info.get("automatic_captions", {})
+        # Create temp directory for subtitle files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
 
-        # Combine with preference
-        all_subs = {**subtitles, **auto_captions}
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "writesubtitles": True,
+                "writeautomaticsub": True,
+                "subtitleslangs": langs,
+                "skip_download": True,
+                "outtmpl": os.path.join(tmpdir, "video"),
+                "socket_timeout": 30,
+                "retries": 2,
+                "ignoreerrors": True,  # Don't fail on subtitle download errors
+            }
 
-        if not all_subs:
+            try:
+                loop = asyncio.get_event_loop()
+                info = await loop.run_in_executor(
+                    _executor,
+                    lambda: self._download_subtitles(video_url, ydl_opts, tmpdir),
+                )
+
+                # Find and parse subtitle file (info may be None but files might exist)
+                return self._find_and_parse_subtitle(tmpdir, langs, info)
+
+            except Exception as e:
+                logger.exception(
+                    "transcript_fetch_error",
+                    video_id=video_id,
+                    error=str(e),
+                )
+                return TranscriptResult(
+                    success=False,
+                    error=f"Failed to fetch transcript: {e}",
+                    source=self.name,
+                )
+
+    def _download_subtitles(
+        self, video_url: str, opts: dict[str, Any], tmpdir: str
+    ) -> dict[str, Any] | None:
+        """Download subtitles using yt-dlp.
+
+        Args:
+            video_url: YouTube video URL
+            opts: yt-dlp options
+            tmpdir: Temporary directory for files
+
+        Returns:
+            Video info dict or None
+        """
+        try:
+            logger.debug(
+                "ytdlp_download_subs_start",
+                video_url=video_url,
+                tmpdir=tmpdir,
+            )
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+                logger.debug(
+                    "ytdlp_download_subs_done",
+                    info_keys=list(info.keys()) if info else None,
+                )
+                return info
+        except Exception as e:
+            logger.exception(
+                "ytdlp_download_subs_error",
+                error=str(e),
+            )
+            return None
+
+    def _find_and_parse_subtitle(
+        self, tmpdir: str, langs: list[str], info: dict[str, Any]
+    ) -> TranscriptResult:
+        """Find and parse downloaded subtitle file.
+
+        Args:
+            tmpdir: Temporary directory containing subtitle files
+            langs: Preferred languages
+            info: Video info dict
+
+        Returns:
+            TranscriptResult with parsed transcript
+        """
+        # List files in temp dir
+        files = list(Path(tmpdir).glob("video.*.vtt"))
+        files.extend(Path(tmpdir).glob("video.*.srt"))
+
+        logger.debug(
+            "subtitle_files_search",
+            tmpdir=tmpdir,
+            files=[f.name for f in files],
+            langs=langs,
+        )
+
+        if not files:
+            logger.warning("no_subtitle_files_found", tmpdir=tmpdir)
             return TranscriptResult(
                 success=False,
-                error="No subtitles available",
+                error="No subtitle files downloaded",
                 source=self.name,
             )
 
-        # Select language
+        # Find best matching file by language preference
+        selected_file = None
         selected_lang = None
-        selected_subs = None
         is_auto = False
 
+        auto_captions = info.get("automatic_captions", {}) if info else {}
+        subtitles = info.get("subtitles", {}) if info else {}
+
         for lang in langs:
-            if lang in subtitles:
-                selected_lang = lang
-                selected_subs = subtitles[lang]
-                is_auto = False
-                break
-            if lang in auto_captions:
-                selected_lang = lang
-                selected_subs = auto_captions[lang]
-                is_auto = True
+            # Check for matching file
+            for f in files:
+                if f".{lang}." in f.name:
+                    selected_file = f
+                    selected_lang = lang
+                    is_auto = lang in auto_captions and lang not in subtitles
+                    break
+            if selected_file:
                 break
 
         # Fallback to first available
-        if not selected_subs:
-            if subtitles:
-                selected_lang = list(subtitles.keys())[0]
-                selected_subs = subtitles[selected_lang]
-                is_auto = False
-            elif auto_captions:
-                selected_lang = list(auto_captions.keys())[0]
-                selected_subs = auto_captions[selected_lang]
-                is_auto = True
+        if not selected_file and files:
+            selected_file = files[0]
+            # Extract language from filename (video.en.vtt -> en)
+            match = re.search(r"\.([a-z]{2}(?:-[A-Z]{2})?)\.", selected_file.name)
+            if match:
+                selected_lang = match.group(1)
+                is_auto = selected_lang in auto_captions if info else True
 
-        if not selected_subs:
+        if not selected_file:
             return TranscriptResult(
                 success=False,
-                error="Could not find usable subtitles",
+                error="Could not find matching subtitle file",
                 source=self.name,
             )
 
-        # Parse subtitle data
+        # Parse the subtitle file
         try:
-            segments = self._parse_subtitle_data(selected_subs)
+            segments = self._parse_vtt_file(selected_file)
             full_text = " ".join(seg.get("text", "") for seg in segments)
+
+            logger.info(
+                "subtitle_parsed",
+                language=selected_lang,
+                segment_count=len(segments),
+                text_length=len(full_text),
+            )
 
             return TranscriptResult(
                 success=True,
@@ -309,38 +413,127 @@ class YtDlpProvider(BaseProvider):
             )
 
         except Exception as e:
+            logger.exception(
+                "subtitle_parse_error",
+                file=selected_file.name,
+                error=str(e),
+            )
             return TranscriptResult(
                 success=False,
-                error=f"Failed to parse subtitles: {e}",
+                error=f"Failed to parse subtitle file: {e}",
                 source=self.name,
             )
 
-    def _parse_subtitle_data(
-        self, subtitle_data: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Parse subtitle data into normalized format.
+    def _parse_vtt_file(self, file_path: Path) -> list[dict[str, Any]]:
+        """Parse VTT subtitle file.
 
         Args:
-            subtitle_data: Raw subtitle data from yt-dlp
+            file_path: Path to VTT file
 
         Returns:
-            List of normalized subtitle segments
+            List of subtitle segments
         """
         segments = []
 
-        for sub in subtitle_data:
-            text = sub.get("text", "").strip()
-            if not text:
+        with open(file_path, encoding="utf-8") as f:
+            content = f.read()
+
+        # VTT time format: 00:00:00.000 --> 00:00:00.000
+        time_pattern = re.compile(
+            r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})"
+        )
+
+        lines = content.split("\n")
+        current_start_ms = 0
+        current_end_ms = 0
+
+        for line in lines:
+            line = line.strip()
+
+            # Skip empty lines and headers
+            if not line or line.startswith("WEBVTT") or line.startswith("Kind:") or line.startswith("Language:"):
                 continue
 
-            start = sub.get("start", 0)
-            duration = sub.get("duration", 0)
+            # Check for timing line
+            match = time_pattern.match(line)
+            if match:
+                # Parse start time
+                current_start_ms = (
+                    int(match.group(1)) * 3600000
+                    + int(match.group(2)) * 60000
+                    + int(match.group(3)) * 1000
+                    + int(match.group(4))
+                )
+                # Parse end time
+                current_end_ms = (
+                    int(match.group(5)) * 3600000
+                    + int(match.group(6)) * 60000
+                    + int(match.group(7)) * 1000
+                    + int(match.group(8))
+                )
+                continue
 
-            segments.append({
-                "text": text,
-                "start_ms": int(start * 1000),
-                "end_ms": int((start + duration) * 1000),
-                "speaker": None,
-            })
+            # This is a text line
+            # Clean up VTT formatting tags
+            text = re.sub(r"<[^>]+>", "", line).strip()
+            if text and current_start_ms < current_end_ms:
+                segments.append({
+                    "text": text,
+                    "start_ms": current_start_ms,
+                    "end_ms": current_end_ms,
+                    "speaker": None,
+                })
+                # Reset timing to avoid duplicate entries
+                current_start_ms = 0
+                current_end_ms = 0
 
         return segments
+
+    def extract_transcript(
+        self, info: dict[str, Any], language_preference: list[str] | None = None
+    ) -> TranscriptResult:
+        """Extract transcript from yt-dlp info (metadata only).
+
+        Note: This method only returns metadata about available subtitles.
+        Use fetch_transcript() to actually download and parse subtitles.
+
+        Args:
+            info: yt-dlp info dict
+            language_preference: Preferred languages for transcript
+
+        Returns:
+            TranscriptResult indicating available subtitles
+        """
+        langs = language_preference or self.DEFAULT_SUBTITLE_LANGS
+
+        subtitles = info.get("subtitles", {})
+        auto_captions = info.get("automatic_captions", {})
+
+        available_langs = list(subtitles.keys()) + list(auto_captions.keys())
+
+        if not available_langs:
+            return TranscriptResult(
+                success=False,
+                error="No subtitles available",
+                source=self.name,
+            )
+
+        # Check if any preferred language is available
+        found_lang = None
+        for lang in langs:
+            if lang in subtitles or lang in auto_captions:
+                found_lang = lang
+                break
+
+        if not found_lang:
+            found_lang = available_langs[0]
+
+        # Return placeholder - caller should use fetch_transcript
+        return TranscriptResult(
+            success=True,
+            text="",  # Will be filled by fetch_transcript
+            segments=[],
+            language=found_lang,
+            is_auto_generated=found_lang in auto_captions,
+            source=self.name,
+        )

@@ -154,9 +154,7 @@ class MetadataOrchestrator:
     ) -> TranscriptResult:
         """Fetch transcript using yt-dlp.
 
-        Transcript fetching is done separately from metadata because:
-        1. It's optional (failure doesn't block the main flow)
-        2. It may require additional processing time
+        This downloads the actual subtitle file and parses it.
 
         Args:
             video_id: YouTube video ID
@@ -171,19 +169,8 @@ class MetadataOrchestrator:
             langs=language_preference,
         )
 
-        # We need yt-dlp for transcript
-        result = await self.ytdlp_provider.fetch(video_id)
-
-        if not result.success or not result.data:
-            return TranscriptResult(
-                success=False,
-                error="Failed to fetch video data for transcript",
-                source="orchestrator",
-            )
-
-        return self.ytdlp_provider.extract_transcript(
-            result.data, language_preference
-        )
+        # Use yt-dlp to fetch and parse transcript
+        return await self.ytdlp_provider.fetch_transcript(video_id, language_preference)
 
     async def fetch_full(
         self,
