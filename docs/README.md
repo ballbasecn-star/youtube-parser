@@ -28,7 +28,8 @@ docs/
 │   ├── project-structure.md
 │   └── provider-strategy.md
 ├── modules/
-│   └── parsing-pipeline.md
+│   ├── parsing-pipeline.md
+│   └── phase3-provider-implementation.md
 ├── operations/
 │   ├── deployment.md
 │   └── development-workflow.md
@@ -49,6 +50,7 @@ docs/
 - `architecture/environment-strategy.md`：定义本地、测试和生产环境的配置隔离原则
 - `architecture/decisions/*.md`：记录长期技术决策
 - `modules/parsing-pipeline.md`：定义解析链路的输入、输出和阶段职责
+- `modules/phase3-provider-implementation.md`：第三阶段真实解析链路的详细技术设计
 - `roadmap/current.md`：记录当前阶段目标和下一步工作
 - `operations/development-workflow.md`：定义开发、验证和提交流程
 - `operations/deployment.md`：定义部署拓扑和发布约束
@@ -66,6 +68,7 @@ docs/
 - `architecture/environment-strategy.md`
 - `architecture/decisions/0001-use-python-fastapi-for-parser-service.md`
 - `modules/parsing-pipeline.md`
+- `modules/phase3-provider-implementation.md`
 - `roadmap/current.md`
 - `operations/development-workflow.md`
 - `operations/deployment.md`
